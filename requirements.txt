@@ -1,1 +1,5 @@
+streamlit
+chromadb
+sentence-transformers
 pypdf
+requests
