@@ -1,6 +1,7 @@
 from pathlib import Path
 import hashlib
 import uuid
+import os
 
 import chromadb
 import requests
@@ -36,8 +37,15 @@ DB_PATH = BASE_DIR / "chroma_db"
 COLLECTION_NAME = "document_collection"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3.2:1b"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "openai/gpt-oss-20b"
+
+# Read the API key from Streamlit Secrets in the cloud, or an environment
+# variable when running locally. Never hard-code the key in this file.
+try:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+except Exception:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 150
@@ -221,7 +229,7 @@ with col1:
     st.metric("Stored Document Chunks", total_chunks)
 
 with col2:
-    st.metric("Language Model", OLLAMA_MODEL)
+    st.metric("Language Model", GROQ_MODEL)
 
 st.divider()
 
@@ -329,24 +337,50 @@ ANSWER:
 """
 
                 # --------------------------------------
-                # GENERATE ANSWER USING OLLAMA
+                # GENERATE ANSWER USING GROQ CLOUD API
                 # --------------------------------------
 
                 st.subheader("AI Generated Answer")
 
-                with st.spinner("Generating answer with Llama..."):
+                if not GROQ_API_KEY:
+                    st.error(
+                        "Groq API key is missing. Add GROQ_API_KEY in "
+                        "Streamlit app Settings → Secrets, then restart the app."
+                    )
+                    st.stop()
+
+                with st.spinner("Generating answer with the hosted language model..."):
                     response = requests.post(
-                        OLLAMA_URL,
-                        json={
-                            "model": OLLAMA_MODEL,
-                            "prompt": prompt,
-                            "stream": False
+                        GROQ_URL,
+                        headers={
+                            "Authorization": f"Bearer {GROQ_API_KEY}",
+                            "Content-Type": "application/json"
                         },
-                        timeout=180
+                        json={
+                            "model": GROQ_MODEL,
+                            "messages": [
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        "You are a document question-answering assistant. "
+                                        "Answer only from the document context supplied by "
+                                        "the user. If the answer is not present, say: "
+                                        "The information is not available in the uploaded documents. "
+                                        "Do not invent facts or use outside knowledge."
+                                    )
+                                },
+                                {"role": "user", "content": prompt}
+                            ],
+                            "temperature": 0,
+                            "max_completion_tokens": 800
+                        },
+                        timeout=120
                     )
 
                     response.raise_for_status()
-                    answer = response.json().get("response", "").strip()
+                    answer = (
+                        response.json()["choices"][0]["message"]["content"] or ""
+                    ).strip()
 
                 if answer:
                     st.success("Answer generated successfully!")
@@ -380,9 +414,13 @@ ANSWER:
                 )
 
         except requests.exceptions.RequestException as e:
+            details = ""
+            if getattr(e, "response", None) is not None:
+                details = e.response.text[:1000]
             st.error(
-                "Could not connect to Ollama. Make sure Ollama is running "
-                f"and the model '{OLLAMA_MODEL}' is available.\n\nDetails: {e}"
+                "Could not generate an answer using the Groq API. Check the "
+                "API key, model availability, account limits, and internet connection. "
+                f"Details: {details or str(e)}"
             )
 
         except Exception as e:
@@ -395,5 +433,5 @@ ANSWER:
 st.divider()
 
 st.caption(
-    "Powered by Streamlit | ChromaDB | Sentence Transformers | Ollama"
+    "Powered by Streamlit | ChromaDB | Sentence Transformers | Groq API"
 )
