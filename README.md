@@ -4,7 +4,7 @@ A Retrieval-Augmented Generation (RAG) application that lets users
 upload PDF documents, ask questions about their content, and receive
 answers grounded in retrieved document passages.
 
-**Live demo:** https://ai-rag-doc-assistant-jb.streamlit.app/\
+**Live demo:** https://ai-rag-doc-assistant-jb.streamlit.app/
 **GitHub repository:**
 https://github.com/janmanjaya2-jb/AI-RAG-Document-QA
 
